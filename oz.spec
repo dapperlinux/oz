@@ -1,7 +1,7 @@
 Summary:    Sandbox system for workstation applications
 Name:       oz
 Version:    1
-Release:    2
+Release:    4
 
 Group:      System Environment/Base
 License:    BSD-3-Clause
@@ -74,6 +74,11 @@ cp %{SOURCE1} %{buildroot}/lib/systemd/system/oz-daemon.service
 # Make sym links
 ln -s /etc/network/if-up.d/oz %{buildroot}/etc/network/if-post-down.d/oz
 
+# Create Directories
+mkdir -p %{buildroot}%{_prefix}/bin-oz
+mkdir -p %{buildroot}/run/resolvconf
+mkdir -p %{buildroot}%{_prefix}/lib/gvfs
+
 %clean
 
 %pre
@@ -115,7 +120,15 @@ systemctl start oz-daemon.service
 # Services
 /lib/systemd/system/oz-daemon.service
 
+# Necessary Directories
+%dir %{_prefix}/bin-oz
+%dir /run/resolvconf
+%dir %{_prefix}/lib/gvfs
+
 
 %changelog
+* Sun Jan 29 2017 Matthew Ruffell <msr50@uclive.ac.nz>
+- Adding directories to start oz without errors
+
 * Sun Dec  4 2016 Matthew Ruffell <msr50@uclive.ac.nz>
 - First packaging
