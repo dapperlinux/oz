@@ -33,7 +33,7 @@ func NewDefaultConfig() *Config {
 		PrefixPath:     "/usr/local",
 		EtcPrefix:      "/etc/oz",
 		SandboxPath:    "/srv/oz",
-		DivertPath:     true,
+		DivertPath:     false,
 		NMIgnoreFile:   "/etc/NetworkManager/conf.d/oz.conf",
 		BridgeMACAddr:  "6A:A8:2E:56:E8:9C",
 		DivertSuffix:   "",
@@ -70,7 +70,7 @@ func LoadConfig(cpath string) (*Config, error) {
 	}
 
 	if c.DivertSuffix == "" && c.DivertPath == false {
-		c.DivertSuffix = "unsafe"
+		c.DivertSuffix = ""
 	}
 
 	return c, nil
