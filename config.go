@@ -41,7 +41,7 @@ func NewDefaultConfig() *Config {
 		OpenVPNConfDir: "/var/lib/oz/openvpn",
 		OpenVPNGroup:   "oz-openvpn",
 		RouteTableBase: 8000,
-		DivertPath:     true,
+		DivertPath:     false,
 		NMIgnoreFile:   "/etc/NetworkManager/conf.d/oz.conf",
 		BridgeMACAddr:  "6A:A8:2E:56:E8:9C",
 		DivertSuffix:   "",
@@ -78,7 +78,7 @@ func LoadConfig(cpath string) (*Config, error) {
 	}
 
 	if c.DivertSuffix == "" && c.DivertPath == false {
-		c.DivertSuffix = "unsafe"
+		c.DivertSuffix = ""
 	}
 
 	return c, nil
