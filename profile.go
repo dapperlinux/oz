@@ -24,6 +24,8 @@ type Profile struct {
 	ProfilePath string `json:"-"`
 	// Default parameters to pass to the program
 	DefaultParams []string `json:"default_params"`
+	// Pass command-line arguments
+	RejectUserArgs bool `json:"reject_user_args"`
 	// Autoshutdown the sandbox when the process exits. One of (no, yes, soft), defaults to yes
 	AutoShutdown ShutdownMode `json:"auto_shutdown"`
 	// Optional list of executable names to watch for exit in case initial command spawns and exit
@@ -106,16 +108,23 @@ type SeccompConf struct {
 	ExtraDefs   []string
 }
 
+type VPNConf struct {
+	VpnType          string `json:"type"`
+	ConfigPath       string
+	DNS              []string
+	UserPassFilePath string `json:"authfile"`
+}
+
 type ExternalForwarder struct {
-	Name       string
-	Dynamic    bool
-	Multi      bool
-	ExtProto   string
-	Proto      string
-	Addr       string
-	TargetHost string
-	TargetPort string
-	SocketOwner  string
+	Name        string
+	Dynamic     bool
+	Multi       bool
+	ExtProto    string
+	Proto       string
+	Addr        string
+	TargetHost  string
+	TargetPort  string
+	SocketOwner string
 }
 
 type WhitelistItem struct {
@@ -154,6 +163,9 @@ type NetworkProfile struct {
 
 	// Name of the bridge to attach to
 	Bridge string
+
+	// VPN type
+	VPNConf VPNConf `json:"vpn"`
 
 	// List of Sockets we want to attach to the jail
 	//  Applies to Nettype: bridge and empty only
