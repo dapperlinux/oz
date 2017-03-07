@@ -1,7 +1,7 @@
 Summary:    Sandbox system for workstation applications
 Name:       oz
 Version:    1
-Release:    7
+Release:    8
 
 Group:      System Environment/Base
 License:    BSD-3-Clause
@@ -95,9 +95,6 @@ ebtables -F FORWARD
 ebtables -A FORWARD -i oz0 -j ACCEPT
 ebtables -A FORWARD -o oz0 -j ACCEPT
 
-# Enable IP forwarding
-echo 1 >/proc/sys/net/ipv4/ip_forward
-
 # Start the sandbox service
 systemctl enable oz-daemon.service
 systemctl start oz-daemon.service
@@ -114,6 +111,7 @@ systemctl start oz-daemon.service
 %{_sysconfdir}/oz/*
 %{_sysconfdir}/rsyslog.d/oz-daemon.conf
 %{_sysconfdir}/sysctl.d/11-grsec-oz.conf
+%{_sysconfdir}/sysctl.d/15-oz-net.conf
 %{_sysconfdir}/X11/Xwrapper.config.oz
 %{_sysconfdir}/xpra/xpra.oz.conf
 
