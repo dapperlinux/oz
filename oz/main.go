@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/subgraph/oz"
 	"github.com/subgraph/oz/oz-daemon"
@@ -112,7 +113,7 @@ func runApplication() {
 		},
 		{
 			Name:   "relaunchxpra",
-			Usage:  "relaunch xpra client for a running sandbox",
+			Usage:  "relaunch xpra client for a running sandbox (\"all\" for all sandboxes)",
 			Action: handleRelaunchXpraClient,
 		},
 		{
@@ -124,6 +125,11 @@ func runApplication() {
 					Name: "f",
 				},
 			},
+		},
+		{
+			Name: "listbridges",
+			Usage: "list configured bridges",
+			Action: handleListBridges,
 		},
 		{
 			Name:   "forward",
@@ -199,6 +205,15 @@ func handleList(c *cli.Context) {
 		fmt.Printf("%2d) %s\n", sb.Id, sb.Profile)
 
 	}
+}
+
+func handleListBridges(c *cli.Context) {
+	bridges, err := daemon.ListBridges()
+	if err != nil {
+		fmt.Printf("Error listing configured bridges: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(strings.Join(bridges,","))
 }
 
 func handleMount(c *cli.Context) {
