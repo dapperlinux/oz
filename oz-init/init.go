@@ -136,7 +136,7 @@ func parseArgs() *initState {
 		gids:      initData.Gids,
 		user:      &initData.User,
 		display:   initData.Display,
-		fs:        fs.NewFilesystem(&initData.Config, log, &initData.User),
+		fs:        fs.NewFilesystem(&initData.Config, log, &initData.User, &initData.Profile),
 	}
 }
 
@@ -775,6 +775,10 @@ func (st *initState) setupFilesystem(extra_whitelist []oz.WhitelistItem, extra_b
 		return err
 	}
 
+	if err := st.bindSharedFolders(st.fs, st.profile.SharedFolders); err != nil {
+		return err
+	}
+
 	if err := st.applyBlacklist(st.fs, extra_blacklist); err != nil {
 		return err
 	}
@@ -838,6 +842,53 @@ func (st *initState) bindWhitelist(fsys *fs.Filesystem, wlist []oz.WhitelistItem
 		}
 		if err := fsys.BindTo(wl.Path, wl.Target, flags, st.display); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func (st *initState) bindSharedFolders(fsys *fs.Filesystem, shared []oz.SharedItem) error {
+
+	if shared == nil {
+		return nil
+	}
+	for _, s := range shared {
+		flags := fs.BindCanCreate
+		if s.Path == "" {
+			continue
+		}
+		if err := fsys.BindTo(s.Path, s.Target, flags, st.display); err != nil {
+			return err
+		}
+		if s.Symlink != "" {
+
+			symlink, err := fs.ResolvePathNoGlob(s.Symlink, -1, st.user, fsys.GetXDGDirs(), st.profile)
+			if err != nil {
+				return err
+			}
+			dest := s.Target
+			ppath, err := fs.ResolvePathNoGlob(s.Path, -1, st.user, fsys.GetXDGDirs(), st.profile)
+			if err != nil {
+				return err
+			}
+			if s.Target == "" {
+				dest = ppath
+			} else {
+				dest, err = fs.ResolvePathNoGlob(s.Target, -1, st.user, fsys.GetXDGDirs(), st.profile)
+
+				if err != nil {
+					return err
+				}
+			}
+
+			spath, err := fsys.CreateSymlink(dest, symlink)
+			if err != nil {
+				return err
+			}
+			if err = os.Lchown(spath, int(st.uid), int(st.gid)); err != nil {
+				st.log.Warning("Failed to chown symobolic link: %v", err)
+			}
+
 		}
 	}
 	return nil
