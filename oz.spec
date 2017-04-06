@@ -1,7 +1,7 @@
 Summary:    Sandbox system for workstation applications
 Name:       oz
 Version:    1
-Release:    9
+Release:    11
 
 Group:      System Environment/Base
 License:    BSD-3-Clause
@@ -14,6 +14,7 @@ Requires: xpra
 Requires: bridge-utils
 Requires: ebtables
 Requires: libacl
+Requires: iptables-services
 BuildRequires: go
 BuildRequires: libacl-devel
 BuildRequires: git
@@ -84,16 +85,17 @@ mkdir -p %{buildroot}%{_prefix}/lib/gvfs
 %pre
 
 %post
-# Setup bridge networking
-for INTERFACE in /sys/class/net/* ; do 
-    INTERFACE="${INTERFACE%/}"; 
-    INTERFACE="${INTERFACE##*/}"; 
-    iptables -t nat -A POSTROUTING -o $INTERFACE -j MASQUERADE ; 
-done
+# Find default route, this is active network interface
+INTERFACE = route | grep '^default' | grep -o '[^ ]*$'
+# Enable IP Masquerading on primary network interface
+iptables -t nat -A POSTROUTING -o $INTERFACE -j MASQUERADE ; 
 ebtables -P FORWARD DROP
 ebtables -F FORWARD
-ebtables -A FORWARD -i oz0 -j ACCEPT
-ebtables -A FORWARD -o oz0 -j ACCEPT
+# Setup oz-default as a bridge with IP forwarding
+ebtables -A FORWARD -i oz-default -j ACCEPT
+ebtables -A FORWARD -o oz-default -j ACCEPT
+# Make the rules persistent
+service iptables save
 
 # Start the sandbox service
 systemctl enable oz-daemon.service
