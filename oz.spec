@@ -15,6 +15,9 @@ Requires: bridge-utils
 Requires: ebtables
 Requires: libacl
 Requires: iptables-services
+Requires:   cairo-gobject
+BuildRequires:  cairo-gobject-devel
+BuildRequires:  gtk3-devel
 BuildRequires: go
 BuildRequires: libacl-devel
 BuildRequires: git
