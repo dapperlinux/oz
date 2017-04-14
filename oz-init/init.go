@@ -55,6 +55,7 @@ type initState struct {
 	xpraReady         sync.WaitGroup
 	dbusUuid          string
 	shutdownRequested bool
+	ephemeral         bool
 }
 
 type InitData struct {
@@ -67,6 +68,7 @@ type InitData struct {
 	Gids      map[string]uint32
 	User      user.User
 	Display   int
+	Ephemeral bool
 }
 
 const (
@@ -137,6 +139,7 @@ func parseArgs() *initState {
 		user:      &initData.User,
 		display:   initData.Display,
 		fs:        fs.NewFilesystem(&initData.Config, log, &initData.User, &initData.Profile),
+		ephemeral: initData.Ephemeral,
 	}
 }
 
@@ -148,7 +151,7 @@ func (st *initState) waitForParentReady() *initState {
 	signal.Notify(c, syscall.SIGUSR1)
 
 	sig := <-c
-	st.log.Info("Recieved SIGUSR1 from parent (%v), ready to init.", sig)
+	st.log.Info("Received SIGUSR1 from parent (%v), ready to init.", sig)
 	signal.Stop(c)
 
 	return st
@@ -187,6 +190,14 @@ func (st *initState) runInit() {
 		wlExtras = append(wlExtras, oz.WhitelistItem{Path: "/dev/shm/pulse-shm-*", Ignore: true})
 	}
 
+	if st.ephemeral {
+		for i := len(st.profile.SharedFolders) - 1; i >= 0; i-- {
+			sf := st.profile.SharedFolders[i]
+			if strings.HasPrefix(sf, "${HOME}") || strings.HasPrefix(sf, "${XDG_") {
+				st.profile.SharedFolders = append(st.profile.SharedFolders[:i], st.profile.SharedFolders[i+1:]...)
+			}
+		}
+	}
 	if len(st.profile.SharedFolders) > 0 {
 		wlExtras = st.addSharedFolders(wlExtras)
 	}
@@ -223,6 +234,8 @@ func (st *initState) runInit() {
 		st.log.Error("Unable to setup dbus: %v", err)
 		os.Exit(1)
 	}
+
+	st.setupEtcFiles()
 
 	oz.ReapChildProcs(st.log, st.handleChildExit)
 
@@ -277,6 +290,39 @@ func (st *initState) addSharedFolders(wlExtras []oz.WhitelistItem) []oz.Whitelis
 			CanCreate: true})
 	}
 	return wlExtras
+}
+
+const hostsfile = `127.0.0.1	localhost
+127.0.1.1	%HOSTNAME% %HOSTNAME%.%DOMAINNAME%
+::1     localhost ip6-localhost ip6-loopback
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+%ADDITIONAL%`
+
+const domainname = "local"
+
+func (st *initState) setupEtcFiles() {
+	phosts := st.profile.Networking.Hosts
+	if len(phosts) > 0 {
+		phosts = "\n\n" + phosts
+	}
+	hosts := hostsfile
+	hosts = strings.Replace(hosts, "%HOSTNAME%", st.profile.Name, -1)
+	hosts = strings.Replace(hosts, "%DOMAINNAME%", domainname, -1)
+	hosts = strings.Replace(hosts, "\n%ADDITIONAL%", phosts, -1)
+	etcfiles := map[string]string{
+		"hostname":   st.profile.Name,
+		"domainname": domainname,
+		"hosts":      hosts,
+		"machine-id": st.dbusUuid,
+		"fstab":      "# This fstab file is empty",
+	}
+	for fpath, fcontents := range etcfiles {
+		fpath = path.Join("/etc", fpath)
+		if err := ioutil.WriteFile(fpath, []byte(fcontents+"\n"), 0644); err != nil {
+			st.log.Warning("Unable to setup etc file item: %v", err)
+		}
+	}
 }
 
 func (st *initState) needsDbus() bool {
@@ -734,7 +780,7 @@ func (st *initState) getProcessExists(pnames []string) bool {
 func (st *initState) processSignals(c <-chan os.Signal, s *ipc.MsgServer) {
 	for {
 		sig := <-c
-		st.log.Info("Recieved signal (%v)", sig)
+		st.log.Info("Received signal (%v)", sig)
 		st.shutdown()
 	}
 }
@@ -790,8 +836,20 @@ func (st *initState) setupFilesystem(extra_whitelist []oz.WhitelistItem, extra_b
 
 	//	fs := fs.NewFilesystem(st.config, st.log)
 
-	if err := setupRootfs(st.fs, st.user, st.uid, st.gid, st.display, st.config.UseFullDev, st.log); err != nil {
+	if err := setupRootfs(st.fs, st.user, st.uid, st.gid, st.display, st.config.UseFullDev, st.log, st.config.EtcIncludes); err != nil {
 		return err
+	}
+
+	if st.ephemeral {
+		for i := len(st.profile.Whitelist) - 1; i >= 0; i-- {
+			wl := st.profile.Whitelist[i]
+			if wl.Path == "" {
+				continue
+			}
+			if whitelistItemIsEphemeral(wl) {
+				st.profile.Whitelist = append(st.profile.Whitelist[:i], st.profile.Whitelist[i+1:]...)
+			}
+		}
 	}
 
 	if err := st.bindWhitelist(st.fs, extra_whitelist); err != nil {
@@ -833,7 +891,7 @@ func (st *initState) setupFilesystem(extra_whitelist []oz.WhitelistItem, extra_b
 		mo.add(st.fs.MountFullDev, st.fs.MountShm)
 	}
 	mo.add( /*st.fs.MountTmp, */ st.fs.MountPts)
-	if !st.profile.NoSysProc {
+	if st.profile.NoSysProc != true {
 		mo.add(st.fs.MountProc, st.fs.MountSys)
 	}
 	return mo.run()
@@ -857,7 +915,6 @@ func (st *initState) createBindSymlinks(fsys *fs.Filesystem, wlist []oz.Whitelis
 			dest = ppath
 		} else {
 			dest, err = fs.ResolvePathNoGlob(wl.Target, -1, st.user, fsys.GetXDGDirs(), st.profile)
-
 			if err != nil {
 				return err
 			}
@@ -939,4 +996,40 @@ func (mo *mountOps) run() error {
 		}
 	}
 	return nil
+}
+
+// ProfileHasEphemerals checks is a profile whitelists any items within the home dir
+func ProfileHasEphemerals(p *oz.Profile) bool {
+	found := false
+	for _, wl := range p.Whitelist {
+		if wl.Path == "" {
+			continue
+		}
+		found = whitelistItemIsEphemeral(wl)
+		if found {
+			return found
+		}
+	}
+	for _, sf := range p.SharedFolders {
+		if strings.HasPrefix(sf, "${HOME}") || strings.HasPrefix(sf, "${XDG_") {
+			return found
+		}
+	}
+	return found
+}
+
+func whitelistItemIsEphemeral(wl oz.WhitelistItem) bool {
+	found := false
+	if wl.Path == "" {
+		return found
+	}
+	if wl.Target != "" {
+		found = (strings.HasPrefix(wl.Target, "${HOME}") || strings.HasPrefix(wl.Target, "${XDG_"))
+	} else {
+		found = (strings.HasPrefix(wl.Path, "${HOME}") || strings.HasPrefix(wl.Path, "${XDG_"))
+	}
+	if found {
+		return found
+	}
+	return found
 }

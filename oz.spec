@@ -1,7 +1,7 @@
 Summary:    Sandbox system for workstation applications
 Name:       oz
 Version:    1
-Release:    11
+Release:    13
 
 Group:      System Environment/Base
 License:    BSD-3-Clause

@@ -41,6 +41,7 @@ type daemonState struct {
 }
 
 func Main() {
+	oz.CheckSettingsOverRide()
 	d := initialize()
 
 	err := runServer(
@@ -48,6 +49,8 @@ func Main() {
 		d.handlePing,
 		d.handleGetConfig,
 		d.handleListProfiles,
+		d.handleGetProfile,
+		d.handleIsRunning,
 		d.handleLaunch,
 		d.handleListSandboxes,
 		d.handleKillSandbox,
@@ -137,7 +140,7 @@ func (d *daemonState) processSignals(c <-chan os.Signal) {
 			ps, err := d.loadProfiles(d.config.ProfileDir)
 			if err != nil {
 				d.log.Error("Failed to reload profiles: %v", err)
-				return
+				continue
 			}
 			d.profiles = ps
 		case syscall.SIGUSR2:
@@ -239,7 +242,7 @@ func readOpenVPNPidFromFile(path string) (int, error) {
 }
 
 func runServer(log *logging.Logger, args ...interface{}) error {
-	s, err := ipc.NewServer(SocketName, messageFactory, log, args...)
+	s, err := ipc.NewServer(GetSocketName(), messageFactory, log, args...)
 	if err != nil {
 		return err
 	}
@@ -271,8 +274,56 @@ func (d *daemonState) handleListProfiles(msg *ListProfilesMsg, m *ipc.Message) e
 	return m.Respond(r)
 }
 
+func (d *daemonState) handleGetProfile(msg *GetProfileMsg, m *ipc.Message) error {
+	d.Debug("Get profile received. Path: %s", msg.Path)
+	p, err := d.getProfileFromLaunchMsg(&LaunchMsg{
+		Path: msg.Path,
+	})
+	if err != nil {
+		return m.Respond(&ErrorMsg{err.Error()})
+	}
+
+	jdata, err := json.Marshal(p)
+	if err != nil {
+		return m.Respond(&ErrorMsg{err.Error()})
+	}
+	return m.Respond(&GetProfileResp{
+		Profile: string(jdata),
+	})
+}
+
+func (d *daemonState) handleIsRunning(msg *IsRunningMsg, m *ipc.Message) error {
+	d.Debug("Is running received. Path: %s", msg.Path)
+	if m.Ucred.Uid == 0 || m.Ucred.Gid == 0 {
+		errmsg := fmt.Sprintf("Rejected launch request for %s by privileged user uid %d, gid %d", msg.Path, m.Ucred.Uid, m.Ucred.Gid)
+		d.Warning(errmsg)
+		return m.Respond(&ErrorMsg{errmsg})
+	}
+
+	p, err := d.getProfileFromLaunchMsg(&LaunchMsg{
+		Path: msg.Path,
+	})
+	if err != nil {
+		return m.Respond(&ErrorMsg{err.Error()})
+	}
+
+	if sbox := d.getRunningSandboxByName(p.Name); sbox != nil {
+		return m.Respond(&OkMsg{})
+	}
+	return m.Respond(&NotOkMsg{})
+}
+
 func (d *daemonState) handleLaunch(msg *LaunchMsg, m *ipc.Message) error {
 	d.Debug("Launch message received. Path: %s Name: %s Pwd: %s Args: %+v", msg.Path, msg.Name, msg.Pwd, msg.Args)
+
+	if m.Ucred.Uid == 0 || m.Ucred.Gid == 0 {
+		errmsg := fmt.Sprintf("Rejected launch request for %s by privileged user uid %d, gid %d", msg.Name, m.Ucred.Uid, m.Ucred.Gid)
+		d.Warning(errmsg)
+		return m.Respond(&ErrorMsg{errmsg})
+	}
+
+	d.log.Info("Execution request from uid %d, gid %d", m.Ucred.Uid, m.Ucred.Gid)
+
 	p, err := d.getProfileFromLaunchMsg(msg)
 	if err != nil {
 		return m.Respond(&ErrorMsg{err.Error()})
@@ -288,10 +339,10 @@ func (d *daemonState) handleLaunch(msg *LaunchMsg, m *ipc.Message) error {
 			sbox.launchProgram(d.config.PrefixPath, msg.Path, msg.Pwd, msg.Args, d.log)
 		}
 	} else {
-		d.Debug("Would launch %s", p.Name)
+		d.Debug("Would launch %s (ephemeral: %b)", p.Name, msg.Ephemeral)
 		rawEnv := msg.Env
 		msg.Env = d.sanitizeEnvironment(p, rawEnv)
-		_, err = d.launch(p, msg, rawEnv, m.Ucred.Uid, m.Ucred.Gid, d.log)
+		_, err = d.launch(p, msg, rawEnv, m.Ucred.Uid, m.Ucred.Gid, msg.Ephemeral, d.log)
 		if err != nil {
 			d.Warning("Launch of %s failed: %v", p.Name, err)
 			return m.Respond(&ErrorMsg{err.Error()})
@@ -509,7 +560,13 @@ func (d *daemonState) getRunningSandboxByName(name string) *Sandbox {
 func (d *daemonState) handleListSandboxes(list *ListSandboxesMsg, msg *ipc.Message) error {
 	r := new(ListSandboxesResp)
 	for _, sb := range d.sandboxes {
-		r.Sandboxes = append(r.Sandboxes, SandboxInfo{Id: sb.id, Address: sb.addr, Mounts: sb.mountedFiles, Profile: sb.profile.Name})
+		r.Sandboxes = append(r.Sandboxes, SandboxInfo{
+			Id:        sb.id,
+			Address:   sb.addr,
+			Mounts:    sb.mountedFiles,
+			Profile:   sb.profile.Name,
+			Ephemeral: sb.ephemeral,
+		})
 	}
 	return msg.Respond(r)
 }

@@ -1,16 +1,19 @@
 package daemon
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 
+	"github.com/subgraph/oz"
 	"github.com/subgraph/oz/ipc"
 )
 
 func clientConnect() (*ipc.MsgConn, error) {
-	return ipc.Connect(SocketName, messageFactory, nil)
+	return ipc.Connect(GetSocketName(), messageFactory, nil)
 }
 
 func clientSend(msg interface{}) (*ipc.Message, error) {
@@ -77,7 +80,66 @@ func ListBridges() ([]string, error) {
 	return body.Bridges, nil
 }
 
-func Launch(arg, cpath string, args []string, noexec bool) error {
+func GetProfile(cpath string) (*oz.Profile, error) {
+	groups, _ := os.Getgroups()
+	gg := []uint32{}
+	if len(groups) > 0 {
+		gg = make([]uint32, len(groups))
+		for i, v := range groups {
+			gg[i] = uint32(v)
+		}
+	}
+	resp, err := clientSend(&GetProfileMsg{
+		Path: cpath,
+		Gids: gg,
+		Env:  os.Environ(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	body, ok := resp.Body.(*GetProfileResp)
+	if !ok {
+		return nil, errors.New("GetProfile response was not expected type")
+	}
+	p := new(oz.Profile)
+	if err := json.Unmarshal([]byte(body.Profile), p); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func IsRunning(cpath string, args []string) (bool, error) {
+	groups, _ := os.Getgroups()
+	gg := []uint32{}
+	if len(groups) > 0 {
+		gg = make([]uint32, len(groups))
+		for i, v := range groups {
+			gg[i] = uint32(v)
+		}
+	}
+	resp, err := clientSend(&IsRunningMsg{
+		Path: cpath,
+		Gids: gg,
+		Args: args,
+		Env:  os.Environ(),
+	})
+	if err != nil {
+		return false, err
+	}
+	switch body := resp.Body.(type) {
+	case *ErrorMsg:
+		return false, fmt.Errorf("%s", body.Msg)
+	case *OkMsg:
+		return true, nil
+	case *NotOkMsg:
+		return false, nil
+	default:
+		return false, fmt.Errorf("Unexpected message received %+v", body)
+	}
+	return false, fmt.Errorf("Unexpected error occured")
+}
+
+func Launch(arg, cpath string, args []string, noexec, ephemeral bool) error {
 	idx, name, err := parseProfileArg(arg)
 	if err != nil {
 		return err
@@ -92,14 +154,15 @@ func Launch(arg, cpath string, args []string, noexec bool) error {
 		}
 	}
 	resp, err := clientSend(&LaunchMsg{
-		Index:  idx,
-		Name:   name,
-		Path:   cpath,
-		Pwd:    pwd,
-		Gids:   gg,
-		Args:   args,
-		Env:    os.Environ(),
-		Noexec: noexec,
+		Index:     idx,
+		Name:      name,
+		Path:      cpath,
+		Pwd:       pwd,
+		Gids:      gg,
+		Args:      args,
+		Env:       os.Environ(),
+		Noexec:    noexec,
+		Ephemeral: ephemeral,
 	})
 	if err != nil {
 		return err
@@ -108,7 +171,7 @@ func Launch(arg, cpath string, args []string, noexec bool) error {
 	case *ErrorMsg:
 		fmt.Printf("error was %s\n", body.Msg)
 	case *OkMsg:
-		fmt.Println("ok received")
+		fmt.Println("ok received from application launch request")
 	default:
 		fmt.Printf("Unexpected message received %+v", body)
 	}
@@ -249,4 +312,29 @@ func dumpLogs(out chan<- string, rr ipc.ResponseReader) {
 			out <- fmt.Sprintf("Unexpected response type (%T)", body)
 		}
 	}
+}
+
+var isSocketName = regexp.MustCompile(`^@[A-Za-z0-9_-]+$`).MatchString
+var sSocketName = ""
+
+func GetSocketName() string {
+	if sSocketName != "" {
+		return sSocketName
+	}
+	bSockName := os.Getenv("SOCKET_NAME")
+
+	if bSockName != "" {
+		fmt.Println("Attempting to connect on custom socket provided through environment: ", bSockName)
+		if bSockName[0:1] != "@" {
+			bSockName = "@" + bSockName
+		}
+		if !isSocketName(bSockName) {
+			fmt.Fprintf(os.Stderr, "Invalid socket name `%s`, reverting to `%s`\n", bSockName, SocketName)
+			bSockName = SocketName
+		}
+	} else {
+		bSockName = SocketName
+	}
+	sSocketName = bSockName
+	return sSocketName
 }
