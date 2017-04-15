@@ -1,7 +1,7 @@
 Summary:    Sandbox system for workstation applications
 Name:       oz
 Version:    1
-Release:    13
+Release:    14
 
 Group:      System Environment/Base
 License:    BSD-3-Clause
@@ -89,7 +89,7 @@ mkdir -p %{buildroot}%{_prefix}/lib/gvfs
 
 %post
 # Find default route, this is active network interface
-INTERFACE = route | grep '^default' | grep -o '[^ ]*$'
+INTERFACE=$(route | grep '^default' | grep -o '[^ ]*$')
 # Enable IP Masquerading on primary network interface
 iptables -t nat -A POSTROUTING -o $INTERFACE -j MASQUERADE ; 
 ebtables -P FORWARD DROP
