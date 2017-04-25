@@ -179,8 +179,8 @@ func (st *initState) runInit() {
 
 	wlExtras := []oz.WhitelistItem{}
 	blExtras := []oz.BlacklistItem{}
-	//wlExtras = append(wlExtras, oz.WhitelistItem{Path: "/etc/oz/mimeapps.list", Target: "${HOME}/.config/mimeapps.list", ReadOnly: true})
-	//wlExtras = append(wlExtras, oz.WhitelistItem{Path: "/etc/oz/mimeapps.list", Target: "/etc/gnome/defaults.list", Force: true, ReadOnly: true})
+	//wlExtras = append(wlExtras, oz.WhitelistItem{Path: path.Join(st.config.EtcPrefix, "mimeapps.list"), Target: "${HOME}/.config/mimeapps.list", ReadOnly: true})
+	//wlExtras = append(wlExtras, oz.WhitelistItem{Path: path.Join(st.config.EtcPrefix, "mimeapps.list"), Target: "/etc/gnome/defaults.list", Force: true, ReadOnly: true})
 	//blExtras = append(blExtras, oz.BlacklistItem{Path: "/etc/shadow"})
 	//blExtras = append(blExtras, oz.BlacklistItem{Path: "/etc/shadow-"})
 
@@ -405,6 +405,7 @@ func (st *initState) startXpraServer() {
 	xpra.Process.Env = []string{
 		"HOME=" + st.user.HomeDir,
 	}
+	xpra.Process.Env = setEnvironOverrides(xpra.Process.Env)
 
 	groups := append([]uint32{}, st.gid)
 	if gid, gexists := st.gids["video"]; gexists {
@@ -520,6 +521,7 @@ func (st *initState) launchApplication(cpath, pwd string, cmdArgs []string) (*ex
 		Gid:    st.gid,
 		Groups: groups,
 	}
+	cmd.Env = setEnvironOverrides(cmd.Env)
 	cmd.Env = append(cmd.Env, st.launchEnv...)
 
 	if st.profile.Seccomp.Mode == oz.PROFILE_SECCOMP_WHITELIST ||
@@ -555,6 +557,15 @@ func (st *initState) launchApplication(cpath, pwd string, cmdArgs []string) (*ex
 	go st.readApplicationOutput(stderr, "stderr")
 
 	return cmd, nil
+}
+
+func setEnvironOverrides(env []string) []string {
+	for _, evar := range os.Environ() {
+		if strings.HasPrefix(evar, "OZ_") {
+			env = append(env, evar)
+		}
+	}
+	return env
 }
 
 func (st *initState) readApplicationOutput(r io.ReadCloser, label string) {
