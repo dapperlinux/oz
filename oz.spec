@@ -1,12 +1,12 @@
 Summary:    Sandbox system for workstation applications
 Name:       oz
 Version:    1
-Release:    15
+Release:    16
 
 Group:      System Environment/Base
 License:    BSD-3-Clause
 Url:        https://github.com/subgraph/oz
-Source0:    %{name}-%{version}.tar.gz
+Source0:    %{name}-%{version}.tar.xz
 Source1:    oz-daemon.service
 BuildArch:  x86_64
 
@@ -15,9 +15,13 @@ Requires: bridge-utils
 Requires: ebtables
 Requires: libacl
 Requires: iptables-services
-Requires:   cairo-gobject
-BuildRequires:  cairo-gobject-devel
-BuildRequires:  gtk3-devel
+Requires: cairo-gobject
+Requires: dbus-python
+Requires: gtkglext-devel
+Requires: gtkglext-libs
+Requires: pygtkglext-devel
+BuildRequires: cairo-gobject-devel
+BuildRequires: gtk3-devel
 BuildRequires: go
 BuildRequires: libacl-devel
 BuildRequires: git
