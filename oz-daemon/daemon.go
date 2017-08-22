@@ -20,6 +20,8 @@ import (
 	"github.com/op/go-logging"
 )
 
+var bSockName = SocketName
+
 type groupEntry struct {
 	Name    string
 	Gid     uint32
@@ -43,7 +45,21 @@ type daemonState struct {
 
 func Main() {
 	oz.CheckSettingsOverRide()
-	GetSocketName()
+
+	bSockName = os.Getenv("SOCKET_NAME")
+
+        if bSockName != "" {
+                fmt.Println("Attempting to connect on custom socket provided through environment: ", bSockName)
+
+                if bSockName[0:1] != "@" {
+                        fmt.Println("Environment variable specified invalid socket name... prepending @")
+                        bSockName = "@" + bSockName
+                }
+
+        } else {
+                bSockName = SocketName
+        }
+
 	d := initialize()
 
 	err := runServer(
@@ -63,6 +79,7 @@ func Main() {
 		d.handleAskForwarder,
 		d.handleListForwarders,
 		d.handleListBridges,
+		d.handleListProxies,
 	)
 	if err != nil {
 		d.log.Error("Error running server: %v", err)
@@ -250,7 +267,7 @@ func readOpenVPNPidFromFile(path string) (int, error) {
 }
 
 func runServer(log *logging.Logger, args ...interface{}) error {
-	s, err := ipc.NewServer(GetSocketName(), messageFactory, log, args...)
+	s, err := ipc.NewServer(bSockName, messageFactory, log, args...)
 	if err != nil {
 		return err
 	}
@@ -574,6 +591,7 @@ func (d *daemonState) handleListSandboxes(list *ListSandboxesMsg, msg *ipc.Messa
 			Mounts:    sb.mountedFiles,
 			Profile:   sb.profile.Name,
 			Ephemeral: sb.ephemeral,
+			InitPid:   sb.init.Process.Pid,
 		})
 	}
 	return msg.Respond(r)
@@ -596,6 +614,12 @@ func (d *daemonState) handleListBridges(msg *ListBridgesMsg, m *ipc.Message) err
 	for _, b := range d.bridges.GetBridgeMap() {
 		r.Bridges = append(r.Bridges, "oz-"+b.Name)
 	}
+	return m.Respond(r)
+}
+
+func (d *daemonState) handleListProxies(msg *ListProxiesMsg, m *ipc.Message) error {
+	r := new(ListProxiesResp)
+	r.Proxies = network.GetProxyPairInfo()
 	return m.Respond(r)
 }
 

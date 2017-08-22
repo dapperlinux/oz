@@ -1,7 +1,7 @@
 Summary:    Sandbox system for workstation applications
 Name:       oz
 Version:    1
-Release:    16
+Release:    17
 
 Group:      System Environment/Base
 License:    BSD-3-Clause
@@ -134,6 +134,9 @@ systemctl start oz-daemon.service
 
 
 %changelog
+* Tue Aug 22 2017 Matthew Ruffell <msr50@uclive.ac.nz>
+- Merged in fw-daemon integration
+
 * Sun Jan 29 2017 Matthew Ruffell <msr50@uclive.ac.nz>
 - Adding directories to start oz without errors
 
