@@ -482,8 +482,9 @@ func (st *initState) launchApplication(cpath, pwd string, cmdArgs []string) (*ex
 		st.log.Notice("Enabling seccomp whitelist for: %s", cpath)
 		if st.profile.Seccomp.Enforce == false {
 			spath := path.Join(st.config.PrefixPath, "bin", "oz-seccomp")
-			cmdArgs = append([]string{spath, "-mode=whitelist", cpath}, cmdArgs...)
+			cmdArgs = append([]string{"-r", "-p", "-", spath, "-mode=whitelist", cpath}, cmdArgs...)
 			cpath = path.Join(st.config.PrefixPath, "bin", "oz-seccomp-tracer")
+			 
 		} else {
 			cmdArgs = append([]string{"-mode=whitelist", cpath}, cmdArgs...)
 			cpath = path.Join(st.config.PrefixPath, "bin", "oz-seccomp")
@@ -553,52 +554,8 @@ func (st *initState) launchApplication(cpath, pwd string, cmdArgs []string) (*ex
 	}
 	st.addChildProcess(cmd, true)
 
-	logPrefix := ""
-	var logFile *os.File = nil
-
-	if st.profile.LogDir != "" {
-		fName := st.profile.Name + ".output.log"
-		logPath := path.Join(st.profile.LogDir, fName)
-		st.log.Notice("Attempting to open process output log at: %s", logPath)
-
-		fi, err := os.Stat(logPath)
-
-		if err == nil {
-			fUid := fi.Sys().(*syscall.Stat_t).Uid
-			fGid := fi.Sys().(*syscall.Stat_t).Gid
-
-			if fUid != st.uid || fGid != st.gid {
-				st.log.Notice("Process output log file exists and was owned by somebody else; aborting logging.")
-			} else {
-				logFile, err = os.OpenFile(logPath, os.O_WRONLY|os.O_APPEND, 0600)
-
-				if err != nil {
-					st.log.Notice("Attempt to open process output logging file resulted in error: %v", err)
-					logFile = nil
-				}
-			}
-		} else {
-			logFile, err = os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_APPEND, 0600)
-
-			if err != nil {
-				st.log.Notice("Attempt to open process output logging file resulted in error: %v", err)
-				logFile = nil
-			} else {
-				err = logFile.Chown(int(st.uid), int(st.gid))
-
-				if err != nil {
-					st.log.Notice("Warning: could not set process output logging file permissions to %v:%v: %v", st.uid, st.gid, err)
-				}
-
-			}
-
-		}
-
-		logPrefix += "[" + strconv.Itoa(cmd.Process.Pid) + "]"
-	}
-
-	go st.readApplicationOutput(stdout, "stdout", logFile, logPrefix)
-	go st.readApplicationOutput(stderr, "stderr", logFile, logPrefix)
+	go st.readApplicationOutput(stdout, "stdout")
+	go st.readApplicationOutput(stderr, "stderr")
 
 	return cmd, nil
 }
@@ -612,17 +569,11 @@ func setEnvironOverrides(env []string) []string {
 	return env
 }
 
-func (st *initState) readApplicationOutput(r io.ReadCloser, label string, log_file *os.File, log_prefix string) {
+func (st *initState) readApplicationOutput(r io.ReadCloser, label string) {
 	sc := bufio.NewScanner(r)
-	defer log_file.Close()
 	for sc.Scan() {
 		line := sc.Text()
 		st.log.Debug("(%s) %s", label, line)
-
-		if log_file != nil {
-			nLine := log_prefix + ":" + label + " " + line + "\n"
-			log_file.Write([]byte(nLine))
-		}
 
 	}
 

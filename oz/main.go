@@ -235,7 +235,6 @@ func handleLaunch(c *cli.Context) {
 }
 
 func handleList(c *cli.Context) {
-	verbose := c.Bool("verbose")
 	sboxes, err := daemon.ListSandboxes()
 	if err != nil {
 		fmt.Printf("Error listing running sandboxes: %v\n", err)
@@ -250,14 +249,7 @@ func handleList(c *cli.Context) {
 		if sb.Ephemeral {
 			ephemeral = " [ephemeral]"
 		}
-		if verbose {
-			fmt.Printf("%2d) %s%s   -> [%d] %s\n", sb.Id, sb.Profile, ephemeral, sb.InitPid, sb.Address)
-			if len(sb.Mounts) > 0 {
-				fmt.Printf("Mounts: %s\n", strings.Join(sb.Mounts, ","))
-			}
-		} else {
-			fmt.Printf("%2d) %s%s\n", sb.Id, sb.Profile, ephemeral)
-		}
+		fmt.Printf("%2d) %s%s\n", sb.Id, sb.Profile, ephemeral)
 	}
 }
 

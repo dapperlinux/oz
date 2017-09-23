@@ -45,20 +45,7 @@ type daemonState struct {
 
 func Main() {
 	oz.CheckSettingsOverRide()
-
-	bSockName = os.Getenv("SOCKET_NAME")
-
-        if bSockName != "" {
-                fmt.Println("Attempting to connect on custom socket provided through environment: ", bSockName)
-
-                if bSockName[0:1] != "@" {
-                        fmt.Println("Environment variable specified invalid socket name... prepending @")
-                        bSockName = "@" + bSockName
-                }
-
-        } else {
-                bSockName = SocketName
-        }
+	GetSocketName()
 
 	d := initialize()
 
@@ -585,14 +572,7 @@ func (d *daemonState) getRunningSandboxByName(name string) *Sandbox {
 func (d *daemonState) handleListSandboxes(list *ListSandboxesMsg, msg *ipc.Message) error {
 	r := new(ListSandboxesResp)
 	for _, sb := range d.sandboxes {
-		r.Sandboxes = append(r.Sandboxes, SandboxInfo{
-			Id:        sb.id,
-			Address:   sb.addr,
-			Mounts:    sb.mountedFiles,
-			Profile:   sb.profile.Name,
-			Ephemeral: sb.ephemeral,
-			InitPid:   sb.init.Process.Pid,
-		})
+		r.Sandboxes = append(r.Sandboxes, SandboxInfo{Id: sb.id, Address: sb.addr, Mounts: sb.mountedFiles, Profile: sb.profile.Name, InitPid: sb.init.Process.Pid})
 	}
 	return msg.Respond(r)
 }

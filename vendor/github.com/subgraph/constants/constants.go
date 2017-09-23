@@ -2,14 +2,15 @@ package constants
 
 import "errors"
 
+
 type ConstTableEntry struct {
-	Name string
-	Val  uint
+        Name string
+        Val uint
 }
 
 type ConstTable struct {
-    Name string
-    Entries []ConstTableEntry
+        Name string
+        Entries []ConstTableEntry
 }
 
 var ConstNameOverrides = map[string]string {
@@ -1605,69 +1606,72 @@ var AllConstants = []ConstTable {
      { Name: "pkey_alloc", Val: 330 },
      { Name: "pkey_free", Val: 331 } } } }
 
+
 func GetConstantTableByName(category string) (ConstTable, error) {
 
-	for i := 0; i < len(AllConstants); i++ {
+        for i := 0; i < len(AllConstants); i++ {
 
-		if AllConstants[i].Name == category {
-			return AllConstants[i], nil
-		}
+                if (AllConstants[i].Name == category) {
+                        return AllConstants[i], nil
+                }
 
-	}
-
-	empty := ConstTable{}
-	return empty, errors.New("could not find specified category")
-}
-
-func getValByConstName(category string, name string) (uint, error) {
-	table, err := GetConstantTableByName(category)
-
-	if err != nil {
-		return 0, err
-	}
-
-    for i := 0; i < len(table.Entries); i++ {
-
-        if table.Entries[i].Name == name {
-            return table.Entries[i].Val, err
         }
 
-	}
+        empty := ConstTable { }
+        return empty, errors.New("could not find specified category")
+}
 
-	return 0, errors.New("could not find constant in specified category")
+
+func getValByConstName(category string, name string) (uint, error) {
+        table, err := GetConstantTableByName(category)
+
+        if err != nil {
+                return 0, err
+        }
+
+        for i := 0; i < len(table.Entries); i++ {
+
+                if table.Entries[i].Name == name {
+                        return table.Entries[i].Val, err
+                }
+
+        }
+
+        return 0, errors.New("could not find constant in specified category")
 }
 
 func GetConstByNo(category string, val uint) (string, error) {
-	table, err := GetConstantTableByName(category)
+        table, err := GetConstantTableByName(category)
 
-	if err != nil {
-		return "", err
-	}
-
-    for i := 0; i < len(table.Entries); i++ {
-
-        if table.Entries[i].Val == val {
-            if val, ok := ConstNameOverrides[table.Entries[i].Name]; ok {
-	            return val, nil
-            }
-            return table.Entries[i].Name, nil
+        if err != nil {
+                return "", err
         }
-	}
 
-	return "", errors.New("could not find value in specified category")
+        for i := 0; i < len(table.Entries); i++ {
+
+                if table.Entries[i].Val == val {
+			if val, ok := ConstNameOverrides[table.Entries[i].Name]; ok {
+				return val, nil
+			}
+                        return table.Entries[i].Name, nil
+                }
+
+        }
+
+        return "", errors.New("could not find value in specified category")
 }
 
 func GetConstByBitmask(category string, val uint) (string, error) {
-	table, err := GetConstantTableByName(category)
+        table, err := GetConstantTableByName(category)
 
-	if err != nil {
-		return "", err
-	}
+        if err != nil {
+                return "", err
+        }
 
 	constName := ""
 	first := 1
 
-    for i := 0; i < len(table.Entries); i++ {
+        for i := 0; i < len(table.Entries); i++ {
 
 		// Just return if we have a straight up match.
 		if table.Entries[i].Val == val {
@@ -1681,12 +1685,13 @@ func GetConstByBitmask(category string, val uint) (string, error) {
 			} else {
 				first = 0
 			}
+
 			constName += table.Entries[i].Name
+                }
+
         }
 
-	}
-
-	return constName, nil
+        return constName, nil
 }
 
 // Functions for gosecco compatibility
@@ -1721,3 +1726,5 @@ func GetConstant(name string) (uint32, bool) {
 
         return 0, false
 }
+
+

@@ -90,7 +90,7 @@ type SandboxInfo struct {
 	Profile   string
 	Mounts    []string
 	Ephemeral bool
-    InitPid int
+	InitPid int
 }
 
 type ListSandboxesResp struct {
